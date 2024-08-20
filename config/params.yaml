@@ -15,7 +15,7 @@
     visualize: true
     # read transfromations to base from a given table instead of TF message
     read_tf_from_table: true
-    Table_degrees: false
+    table_degrees: false
     # table of lidar name (frame_id in ROS), xyz translation [m], rpy rotation [deg/rad]
     # hesai_center_lidar: [1.60402, -0.01154, 2.08438, 0.02102, -0.01698, 1.58864]
     hesai_center_lidar: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
@@ -40,9 +40,9 @@
     # Frame id for the base frame relative to which the LiDARs are calibrated in the end
     base_frame_id: base_link
     # when true, calibrate target LiDAR (z, and pitch) to the base frame.
-    calibrate_target: true
+    calibrate_target: false
     # when true, calibrate all LiDARs to the base frame isntead of to other LiDARs
-    calibrate_to_base: true
+    calibrate_to_base: false
 
     # calibration results are stored here (path relative to the dir with multi_lidar_calibrator.py)
     default_output_dir: /../output/
