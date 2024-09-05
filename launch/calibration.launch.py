@@ -22,34 +22,51 @@ def generate_launch_description():
         description="Path to the ROS2 parameters file to use.",
     )
 
-    lidar_topics_arg = DeclareLaunchArgument(
-        "lidar_topics",
-        default_value='["/center_lidar/lidar_points", "/left_lidar/lidar_points"]',
-        description="List of LiDAR topics."
-    )
+    # Define lidar topics for each node instance
+    lidar_topics_node1 = ["/center_lidar/lidar_points", "/left_lidar/lidar_points"]
+    lidar_topics_node2 = ["/center_lidar/lidar_points", "/right_lidar/lidar_points"]
 
-    # Use LaunchConfiguration to fetch the values of the arguments
+    # LaunchConfiguration to fetch the values of the arguments
     parameter_file_launch_config = LaunchConfiguration("parameter_file")
     output_dir_launch_config = LaunchConfiguration("output_dir")
-    lidar_topics_launch_config = LaunchConfiguration("lidar_topics")
+
+    # Node 1 (center and left lidar)
+    node_1 = Node(
+        package="multi_lidar_calibrator",
+        executable="multi_lidar_calibrator",
+        name="multi_lidar_calibration_node_1",
+        parameters=[
+            parameter_file_launch_config,
+            {
+                'output_dir': output_dir_launch_config,
+                'lidar_topics': lidar_topics_node1
+            }
+        ],
+        remappings=[],  # No remapping for this node
+        output="screen",
+    )
+
+    # Node 2 (center and right lidar)
+    node_2 = Node(
+        package="multi_lidar_calibrator",
+        executable="multi_lidar_calibrator",
+        name="multi_lidar_calibration_node_2",
+        parameters=[
+            parameter_file_launch_config,
+            {
+                'output_dir': output_dir_launch_config,
+                'lidar_topics': lidar_topics_node2
+            }
+        ],
+        remappings=[('/start_left_lidar_calibration', '/start_right_lidar_calibration')],
+        output="screen",
+    )
 
     return LaunchDescription(
         [
             params_declare,
             output_dir_arg,
-            lidar_topics_arg,
-            Node(
-                package="multi_lidar_calibrator",
-                executable="multi_lidar_calibrator",
-                name="multi_lidar_calibration_node",
-                parameters=[
-                    parameter_file_launch_config,
-                    {
-                        'output_dir': output_dir_launch_config,
-                        'lidar_topics': lidar_topics_launch_config
-                    }
-                ],
-                output="screen",
-            ),
+            node_1,
+            node_2,
         ]
     )

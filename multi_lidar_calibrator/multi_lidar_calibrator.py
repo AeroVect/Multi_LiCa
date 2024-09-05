@@ -12,6 +12,7 @@ from sensor_msgs.msg import PointCloud2
 from tf2_msgs.msg import TFMessage
 
 from .calibration.Calibration import *
+from std_srvs.srv import Trigger
 
  
 def get_transfrom(tf_msg: TFMessage, child_frame_id: str) -> Transform:
@@ -58,13 +59,14 @@ class MultiLidarCalibrator(Node):
         self.frame_count = self.declare_parameter("frame_count", 1).value
         self.runs_count = self.declare_parameter("runs_count", 1).value
         self.crop_cloud = self.declare_parameter("crop_cloud", 25).value
-
+        _is_left_lidar = True if '/left_lidar/lidar_points' in self.topic_names else False
         self.output_dir = (
             os.path.dirname(os.path.realpath(__file__))
             + self.declare_parameter("output_dir", "/../output/").value
         )
+        suffix = '_left' if _is_left_lidar else '_right'
         if not os.path.exists(self.output_dir):
-            os.makedirs(self.output_dir)
+            os.makedirs(self.output_dir + suffix)
         self.pcd_in_dir = (
             os.path.dirname(os.path.realpath(__file__))
             + self.declare_parameter("pcd_directory", "/../data/demo/").value
@@ -90,9 +92,12 @@ class MultiLidarCalibrator(Node):
         self.subscribers = []
         self.counter = 0
         self.read_pcds_from_file = self.declare_parameter("read_pcds_from_file", True).value
+
         with open(self.output_dir + self.results_file, "w") as file:  # clean the file
-            file.write("")
+                file.write("")
         self.tf_msg: TFMessage = None
+        self.declared_lidars_flag = False
+        self.is_calibrating = False
         for topic in self.topic_names:
             self.subscribers.append(
                 self.create_subscription(PointCloud2, topic, self.pointcloud_callback, 10)
@@ -100,44 +105,18 @@ class MultiLidarCalibrator(Node):
         self.tf_subscriber = self.create_subscription(
             TFMessage, self.tf_topic, self.tf_callback, 10
         )
-        self.declared_lidars_flag = False
+        self.start_left_lidar_calibration_service = self.create_service(Trigger, "start_left_lidar_calibration", self.start_lidar_calibration_callback)
 
-        # read all the data from files (without ROS)
-        if self.read_pcds_from_file and self.read_tf_from_table:
-            # get LiDAR names as subdirectory names
-            lidar_list = [
-                os.path.splitext(os.path.basename(path))[0]
-                for path in glob.glob(self.pcd_in_dir + "*")
-            ]
-            pcd_paths = dict(zip(lidar_list, [None] * len(lidar_list)))
-            for lidar in lidar_list:
-                self.declare_parameter(lidar, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
-                pcd_paths[lidar] = glob.glob(self.pcd_in_dir + lidar + "*")
-            self.lidar_dict = dict(
-                zip(
-                    lidar_list,
-                    [
-                        Lidar(
-                            lidar,
-                            Translation(*self.get_parameter(lidar).value[0:3]),
-                            Rotation(*self.get_parameter(lidar).value[3:], True),
-                        )
-                        for lidar in lidar_list
-                    ],
-                )
-            )
-            for lidar in lidar_list:
-                pcd = o3d.io.read_point_cloud(pcd_paths[lidar][0])
-                for i in range(1, self.frame_count):
-                    pcd += o3d.io.read_point_cloud(pcd_paths[lidar][i])
-                self.lidar_dict[lidar].load_pcd(pcd)
-            self.process_data()
-            exit(0)
-        elif self.read_pcds_from_file and not self.read_tf_from_table:
-            self.get_logger().error("read_tf_from_table is set to False")
-            exit(1)
-        else:
-            self.get_logger().info("waiting for point cloud messages...")
+    def start_calibration(self):
+        self.is_calibrating = True
+
+    def start_lidar_calibration_callback(self, request, response):
+        calibrating_lidars = [lidar for lidar in self.lidar_data.keys()]
+        self.get_logger().info(f"Calibrating {calibrating_lidars}...")
+        self.start_calibration()
+        response.success = True
+        response.message = f"{calibrating_lidars} calibration completed!"
+        return response
 
     def log_calibration_info(self, calibration: Calibration):
         """Log calibration information in ROS and output file"""
@@ -487,41 +466,44 @@ class MultiLidarCalibrator(Node):
         self.get_logger().info(f"Calibrations results are stored in: {self.output_dir}")
 
     def tf_callback(self, msg):
-        self.get_logger().info("Received TFMessage data")
-        self.tf_msg = msg
+        if self.is_calibrating:
+            self.get_logger().info("Received TFMessage data")
+            self.tf_msg = msg
 
     def pointcloud_callback(self, msg: PointCloud2):
         # Wait for the TFMessage before processing the point cloud if table is not used
-        if self.tf_msg is None and not self.read_tf_from_table:
-            self.get_logger().info("Waiting for tf...")
-            return
 
-        # Add the point cloud to the lidar_data dictionary
-        if msg.header.frame_id not in self.lidar_data.keys():
-            self.lidar_data[msg.header.frame_id] = [msg]
-        else:
-            if len(self.lidar_data[msg.header.frame_id]) >= self.frame_count:
-                return  # Don't save more point clouds than needed
-            self.lidar_data[msg.header.frame_id].append(msg)
+        if self.is_calibrating:    
+            if self.tf_msg is None and not self.read_tf_from_table:
+                self.get_logger().info("Waiting for tf...")
+                return
 
-        # Process the data after receiving the required number of point clouds for each LiDAR
-        if [len(self.lidar_data[i]) == self.frame_count for i in self.lidar_data.keys()] == [
-            True
-        ] * len(self.topic_names):
-            if self.read_tf_from_table and not self.declared_lidars_flag:
-                for lidar in self.lidar_data.keys():
-                    self.declare_parameter(lidar)
-                self.declared_lidars_flag = True  # Don't repeatedly declare the same parameters
-            begin = time()
-            self.read_data()
-            self.process_data()
-            end = time()
-            with open(self.output_dir + self.results_file, "a") as file:
-                file.write(f"Complete calibration time: {end - begin}\n")
-            self.lidar_data = {}  # Clean the data after each calibration (for multiple runs)
-            self.counter += 1
-            if self.counter >= self.runs_count:
-                exit(0)
+            # Add the point cloud to the lidar_data dictionary
+            if msg.header.frame_id not in self.lidar_data.keys():
+                self.lidar_data[msg.header.frame_id] = [msg]
+            else:
+                if len(self.lidar_data[msg.header.frame_id]) >= self.frame_count:
+                    return  # Don't save more point clouds than needed
+                self.lidar_data[msg.header.frame_id].append(msg)
+
+            # Process the data after receiving the required number of point clouds for each LiDAR
+            if [len(self.lidar_data[i]) == self.frame_count for i in self.lidar_data.keys()] == [
+                True
+            ] * len(self.topic_names):
+                if self.read_tf_from_table and not self.declared_lidars_flag:
+                    for lidar in self.lidar_data.keys():
+                        self.declare_parameter(lidar)
+                    self.declared_lidars_flag = True  # Don't repeatedly declare the same parameters
+                begin = time()
+                self.read_data()
+                self.process_data()
+                end = time()
+                with open(self.output_dir + self.results_file, "a") as file:
+                    file.write(f"Complete calibration time: {end - begin}\n")
+                self.lidar_data = {}  # Clean the data after each calibration (for multiple runs)
+                self.counter += 1
+                if self.counter >= self.runs_count:
+                    self.is_calibrating = False
 
 
 def main(args=None):

@@ -59,15 +59,15 @@ WORKDIR /ros_ws
 
 COPY . /ros_ws/src/multi_lidar_calibration/
 
+RUN pip install --upgrade pip && \
+  pip install -r src/multi_lidar_calibration/requirements.txt
+
 RUN cd /ros_ws/src/multi_lidar_calibration/TEASER-plusplus && \
     mkdir build && \
     cd build && \
     cmake -DTEASERPP_PYTHON_VERSION=3.10 .. && \
     make teaserpp_python && \
     cd python && pip install .
-
-RUN pip install --no-cache-dir --upgrade pip && \
-  pip install --no-cache-dir -r src/multi_lidar_calibration/requirements.txt
 
 RUN /bin/bash -c '. /opt/ros/$ROS_DISTRO/setup.bash && \
     colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release --packages-up-to multi_lidar_calibrator'
