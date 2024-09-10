@@ -4,7 +4,7 @@
     # when > 1, the environment and LiDARs should be static. In general, calibration is (much) worse if dynamic.
     frame_count: 5
     # number of complete calibration runs (for testing purposes)
-    runs_count: 3
+    runs_count: 1
 
     # when enabled,finds point clouds with most overlap automatically
     # this method is more general and might be more precise but is slower

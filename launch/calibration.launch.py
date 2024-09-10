@@ -23,15 +23,15 @@ def generate_launch_description():
     )
 
     # Define lidar topics for each node instance
-    lidar_topics_node1 = ["/center_lidar/lidar_points", "/left_lidar/lidar_points"]
-    lidar_topics_node2 = ["/center_lidar/lidar_points", "/right_lidar/lidar_points"]
+    left_to_center_lidar_calibration_node_topics = ["/center_lidar/lidar_points", "/left_lidar/lidar_points"]
+    right_to_center_lidar_calibration_node_topics = ["/center_lidar/lidar_points", "/right_lidar/lidar_points"]
 
     # LaunchConfiguration to fetch the values of the arguments
     parameter_file_launch_config = LaunchConfiguration("parameter_file")
     output_dir_launch_config = LaunchConfiguration("output_dir")
 
     # Node 1 (center and left lidar)
-    node_1 = Node(
+    left_to_center_calibration_node = Node(
         package="multi_lidar_calibrator",
         executable="multi_lidar_calibrator",
         name="multi_lidar_calibration_node_1",
@@ -39,15 +39,15 @@ def generate_launch_description():
             parameter_file_launch_config,
             {
                 'output_dir': output_dir_launch_config,
-                'lidar_topics': lidar_topics_node1
+                'lidar_topics': left_to_center_lidar_calibration_node_topics
             }
         ],
-        remappings=[],  # No remapping for this node
+        remappings=[('/lidar_calibration', '/start_left_lidar_calibration')],
         output="screen",
     )
 
     # Node 2 (center and right lidar)
-    node_2 = Node(
+    right_to_center_calibration_node = Node(
         package="multi_lidar_calibrator",
         executable="multi_lidar_calibrator",
         name="multi_lidar_calibration_node_2",
@@ -55,10 +55,10 @@ def generate_launch_description():
             parameter_file_launch_config,
             {
                 'output_dir': output_dir_launch_config,
-                'lidar_topics': lidar_topics_node2
+                'lidar_topics': right_to_center_lidar_calibration_node_topics
             }
         ],
-        remappings=[('/start_left_lidar_calibration', '/start_right_lidar_calibration')],
+        remappings=[('/lidar_calibration', '/start_right_lidar_calibration')],
         output="screen",
     )
 
@@ -66,7 +66,7 @@ def generate_launch_description():
         [
             params_declare,
             output_dir_arg,
-            node_1,
-            node_2,
+            left_to_center_calibration_node,
+            right_to_center_calibration_node,
         ]
     )

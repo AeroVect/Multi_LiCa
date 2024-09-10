@@ -65,7 +65,7 @@ class MultiLidarCalibrator(Node):
             + self.declare_parameter("output_dir", "/../output/").value
         )
         suffix = '_left' if _is_left_lidar else '_right'
-        if not os.path.exists(self.output_dir):
+        if not os.path.exists(self.output_dir + suffix):
             os.makedirs(self.output_dir + suffix)
         self.pcd_in_dir = (
             os.path.dirname(os.path.realpath(__file__))
@@ -105,7 +105,7 @@ class MultiLidarCalibrator(Node):
         self.tf_subscriber = self.create_subscription(
             TFMessage, self.tf_topic, self.tf_callback, 10
         )
-        self.start_left_lidar_calibration_service = self.create_service(Trigger, "start_left_lidar_calibration", self.start_lidar_calibration_callback)
+        self.start_left_lidar_calibration_service = self.create_service(Trigger, "lidar_calibration", self.start_lidar_calibration_callback)
 
     def start_lidar_calibration_callback(self, request, response):
         """Service callback to start the calibration process for the lidar. Defaults to left lidar
@@ -119,14 +119,7 @@ class MultiLidarCalibrator(Node):
         """
         calibrating_lidars = [lidar for lidar in self.lidar_data.keys()]
         self.get_logger().info(f"Received request to calibrate {calibrating_lidars}...")
-        
-        if self.is_calibrating:
-            self.get_logger().warn(f"Calibration of {calibrating_lidars} already in progress!")
-            # not(True) = False
-            response.success = not self.is_calibrating 
-            response.message = f"Calibration of {calibrating_lidars} already in progress!"
-            return response
-        
+        # Set flag to True after receiving service call        
         self.is_calibrating = True
        
         self.get_logger().info(f"Calibrating {calibrating_lidars}...")
@@ -471,9 +464,8 @@ class MultiLidarCalibrator(Node):
         self.get_logger().info(f"Calibrations results are stored in: {self.output_dir}")
 
     def tf_callback(self, msg):
-        if self.is_calibrating:
-            self.get_logger().info("Received TFMessage data")
-            self.tf_msg = msg
+        self.get_logger().info("Received TFMessage data")
+        self.tf_msg = msg
 
     def pointcloud_callback(self, msg: PointCloud2):
         """ Use this callback to read the point cloud data from ROS and store it in the lidar_data dictionary
@@ -490,7 +482,9 @@ class MultiLidarCalibrator(Node):
         if msg.header.frame_id not in self.lidar_data.keys():
             self.lidar_data[msg.header.frame_id] = [msg]
         else:
-            if len(self.lidar_data[msg.header.frame_id]) >= self.frame_count:
+            if len(self.lidar_data[msg.header.frame_id]) > self.frame_count:
+                # Remove the oldest point cloud, to make way for the new one
+                self.lidar_data[msg.header.frame_id].pop(0)
                 return  # Don't save more point clouds than needed
             self.lidar_data[msg.header.frame_id].append(msg)
 
