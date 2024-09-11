@@ -141,7 +141,7 @@ class MultiLidarCalibrator(Node):
 
     def log_calibration_info(self, calibration: Calibration):
         """Log calibration information in ROS and output file"""
-        calibration_info = f"calibration info:\n{calibration.info(False, True)}"
+        calibration_info = f"calibration info:\n{calibration.info(False)}"
         self.get_logger().info(calibration_info)
         with open(self.output_dir + self.results_file, "a") as file:
             file.write(calibration_info + "\n")

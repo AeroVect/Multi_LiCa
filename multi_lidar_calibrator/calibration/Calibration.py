@@ -363,43 +363,25 @@ class Calibration:
             self.source.pcd_transformed.transform(transformation_matrix)
             self.source.calib_tf_matrix = TransformationMatrix.from_matrix(transformation_matrix)
 
-    def info(self, degrees=False, matrix=False):
+    def info(self, degrees=False):
         """
-        Generate a string containing information about the calibration.
+        Generate a dictionary containing information about the calibration.
 
         Args:
             degrees: If True, the rotation angles are converted to degrees. If False, they are left in radians.
-            matrix: If True, prints the transformation matrix.
         Returns:
-            A string containing information about the calibration.
+            A dictionary containing information about the calibration.
         """
-        if matrix:
-            s = (
-                "calibrated transformation matrix:\n"
-                + str(self.calibrated_transformation.matrix)
-                + "\n"
-            )
-        else:
-            s = ""
-        return (
-            self.source.name
-            + " to "
-            + self.target.name
-            + " calibration\n"
-            + "calibrated xyz = "
-            + self.calibrated_transformation.translation.__str__()
-            + "\n"
-            + "calibrated rpy = "
-            + self.calibrated_transformation.rotation.__str__(degrees)
-            + "\n"
-            + "fitness: "
-            + str(self.reg_p2l.fitness)
-            + ", inlier_rmse: "
-            + str(self.reg_p2l.inlier_rmse)
-            + "\n"
-            + s
-            + "_" * 100
-        )
+        info_dict = {
+            "source_name": self.source.name,
+            "target_name": self.target.name,
+            "calibrated_xyz": self.calibrated_transformation.translation.as_arr(),
+            "calibrated_rpy": self.calibrated_transformation.rotation.as_arr(degrees),
+            "fitness": self.reg_p2l.fitness,
+            "inlier_rmse": self.reg_p2l.inlier_rmse
+        }
+
+        return  info_dict
 
     def preprocess_point_cloud(self, pcd, voxel_size):
         pcd_down = pcd
