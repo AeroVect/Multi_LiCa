@@ -482,10 +482,9 @@ class MultiLidarCalibrator(Node):
         if msg.header.frame_id not in self.lidar_data.keys():
             self.lidar_data[msg.header.frame_id] = [msg]
         else:
-            if len(self.lidar_data[msg.header.frame_id]) > self.frame_count:
+            if len(self.lidar_data[msg.header.frame_id]) >= self.frame_count:
                 # Remove the oldest point cloud, to make way for the new one
                 self.lidar_data[msg.header.frame_id].pop(0)
-                return  # Don't save more point clouds than needed
             self.lidar_data[msg.header.frame_id].append(msg)
 
     def start_calibration(self):
