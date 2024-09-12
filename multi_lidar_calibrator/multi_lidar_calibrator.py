@@ -94,10 +94,9 @@ class MultiLidarCalibrator(Node):
         self.read_pcds_from_file = self.declare_parameter("read_pcds_from_file", True).value
 
         with open(self.output_dir + self.results_file, "w") as file:  # clean the file
-                file.write("")
+            file.write("")
         self.tf_msg: TFMessage = None
         self.declared_lidars_flag = False
-        self.is_calibrating = False
         for topic in self.topic_names:
             self.subscribers.append(
                 self.create_subscription(PointCloud2, topic, self.pointcloud_callback, 10)
@@ -105,7 +104,7 @@ class MultiLidarCalibrator(Node):
         self.tf_subscriber = self.create_subscription(
             TFMessage, self.tf_topic, self.tf_callback, 10
         )
-        self.start_left_lidar_calibration_service = self.create_service(Trigger, "lidar_calibration", self.start_lidar_calibration_callback)
+        self.start_lidar_calibration_service = self.create_service(Trigger, "lidar_calibration", self.start_lidar_calibration_callback)
 
     def start_lidar_calibration_callback(self, request, response):
         """Service callback to start the calibration process for the lidar. Defaults to left lidar
@@ -120,13 +119,12 @@ class MultiLidarCalibrator(Node):
         calibrating_lidars = [lidar for lidar in self.lidar_data.keys()]
         self.get_logger().info(f"Received request to calibrate {calibrating_lidars}...")
         # Set flag to True after receiving service call        
-        self.is_calibrating = True
        
         self.get_logger().info(f"Calibrating {calibrating_lidars}...")
         self.start_calibration()
         # If we reach end of calibration process, the flag is set to False, which means we are done
         # hence success is True
-        response.success = not self.is_calibrating
+        response.success = True
         response.message = f"{calibrating_lidars} calibration completed!"
         return response
 
@@ -510,7 +508,6 @@ class MultiLidarCalibrator(Node):
                 self.get_logger().info("Calibration completed!")
         # Free up the service for the next calibration, if the required number of point clouds is not received or
         # calibration is completed
-        self.is_calibrating = False
         self.get_logger().info("Waiting for the next request...")
 
 def main(args=None):
