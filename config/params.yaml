@@ -78,3 +78,8 @@
     r_voxel_size: 0.1
     # number of reruns of RANSAC for better robustness
     r_runs: 10
+
+    calibration:
+      sensors_config_path: /etc/tractor_config/sensors_config.yaml
+      translation_rmse_threshold_m: 0.1
+      rotation_error_threshold_degree: 0.5

@@ -69,6 +69,9 @@ RUN cd /ros_ws/src/multi_lidar_calibration/TEASER-plusplus && \
 RUN pip install --no-cache-dir --upgrade pip && \
   pip install --no-cache-dir -r src/multi_lidar_calibration/requirements.txt
 
+COPY ./multi_lidar_calibrator/config.yaml /ros_ws/src/multi_lidar_calibration/calibration/
+COPY ./multi_lidar_calibrator/evaluation_rel.py /ros_ws/src/multi_lidar_calibration/calibration/
+  
 RUN /bin/bash -c '. /opt/ros/$ROS_DISTRO/setup.bash && \
     colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release --packages-up-to multi_lidar_calibrator'
 

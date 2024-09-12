@@ -363,7 +363,7 @@ class Calibration:
             self.source.pcd_transformed.transform(transformation_matrix)
             self.source.calib_tf_matrix = TransformationMatrix.from_matrix(transformation_matrix)
 
-    def info(self, degrees=False):
+    def info(self, degrees=False) -> dict:
         """
         Generate a dictionary containing information about the calibration.
 
@@ -376,7 +376,7 @@ class Calibration:
             "source_name": self.source.name,
             "target_name": self.target.name,
             "calibrated_xyz": self.calibrated_transformation.translation.as_arr(),
-            "calibrated_rpy": self.calibrated_transformation.rotation.as_arr(degrees),
+            "calibrated_rpy": self.calibrated_transformation.rotation.as_arr(degrees = degrees),
             "fitness": self.reg_p2l.fitness,
             "inlier_rmse": self.reg_p2l.inlier_rmse
         }
