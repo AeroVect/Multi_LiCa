@@ -14,7 +14,5 @@ docker run -it --rm --privileged \
     -v $SCRIPT_DIR/../output:/ros_ws/src/multi_lidar_calibration/output \
     tum.ftm.multi_lidar_calibration:latest \
     /bin/bash -c "source /ros_ws/install/setup.bash && \
-    ros2 launch multi_lidar_calibrator calibration.launch.py && \
-    ros2 launch multi_lidar_calibrator calibration.launch.py lidar_topics:='["/center_lidar/lidar_points", "/right_lidar/lidar_points"]'"
-
+    ros2 launch multi_lidar_calibrator calibration.launch.py"
 xhost -local:

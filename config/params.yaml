@@ -2,7 +2,7 @@
   ros__parameters:
     # number of point clouds for each lidar for the calibration. Larger number might improve robustness
     # when > 1, the environment and LiDARs should be static. In general, calibration is (much) worse if dynamic.
-    frame_count: 10
+    frame_count: 5
     # number of complete calibration runs (for testing purposes)
     runs_count: 1
 
@@ -64,7 +64,7 @@
     # makes GICP faster by removing ground from a cloud but might reduce accuracy
     remove_ground_flag: false
     # calibrations with fitness score <= threshold are considered unsuccessful (not enough overlap)
-    fitness_score_threshold: 0.2
+    fitness_score_threshold: 0.185
 
     # parameters for RANSAC. RANSAC is used to calibrate target LiDAR to the ground plane
     # or to speed up GICP by removing ground plane from the point cloud.
