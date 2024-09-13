@@ -11,7 +11,7 @@ from rclpy.node import Node
 from sensor_msgs.msg import PointCloud2
 from tf2_msgs.msg import TFMessage
 
-from .evaluation_rel import evaluate
+from .evaluation.evaluation_rel import evaluate
 from .calibration.Calibration import *
 
  
@@ -89,7 +89,7 @@ class MultiLidarCalibrator(Node):
         # Calibration thresholds for verification of the calibration results
         self.translation_rmse_threshold_m = self.declare_parameter("calibration.translation_rmse_threshold_m", 0.1).value
         self.rotation_error_threshold_degree = self.declare_parameter("calibration.rotation_error_threshold_degree", 0.1).value
-        self.sensors_config_path = self.declare_parameter("sensors_config_path", "/ros_ws/src/multi_lidar_calibration/multi_lidar_calibrator/config.yaml").value
+        self.sensors_config_path = self.declare_parameter("sensors_config_path", "/ros_ws/src/multi_lidar_calibration/multi_lidar_calibrator/evaluation/config.yaml").value
         self.lidar_data = {}
         self.lidar_dict = {}
         self.subscribers = []
@@ -167,23 +167,27 @@ class MultiLidarCalibrator(Node):
         Returns:
             bool: returns True if the calibration values are within the desired threshold else False.
         """
-        lidar_xyz = [calibration["calibrated_xyz"][0], calibration["calibrated_xyz"][1], calibration["calibrated_xyz"][2]]
-        lidar_rpy = [calibration["calibrated_rpy"][0], calibration["calibrated_rpy"][1], calibration["calibrated_rpy"][2]]
+        
         fitness = calibration["fitness"]
-        # Add the two list with xyz and rpy value into one list, with the associated lidar name
-        lidar_calibration = [calibration["source_name"]] + lidar_xyz + lidar_rpy
-
+        
         if fitness <= self.fitness_score_threshold:
             self.get_logger().info("Fitness score does not meet the threshold, Try calibrating again!")
             return False
+        
         self.get_logger().info("Evaluating the calibration results...")
         self.get_logger().info(f"Translation RMSE threshold: {self.translation_rmse_threshold_m}")
         self.get_logger().info(f"Rotation error threshold: {self.rotation_error_threshold_degree}")
         
-        translation_error_rmse, rotation_error_degrees = evaluate(lidar_calibration, self.sensors_config_path)
+        translation_error_rmse, rotation_error_degrees = evaluate(calibration, self.sensors_config_path)
+        
+        if translation_error_rmse is None or rotation_error_degrees is None:
+            self.get_logger().info("Error in evaluation, please check the config file")
+            return False
+        
         if translation_error_rmse > self.translation_rmse_threshold_m:
             self.get_logger().info("Translation error is above the threshold, Try calibrating again!")
             return False
+        
         if rotation_error_degrees > self.rotation_error_threshold_degree:
             self.get_logger().info("Rotation error is above the threshold, Try calibrating again!")
             return False

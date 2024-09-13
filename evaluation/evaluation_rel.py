@@ -21,33 +21,40 @@ def calculate_rmse_error(gt_pose, calc_pose):
 
     return translation_errors, translation_error_rmse, rotation_error_degrees, rotation_errors_individual
 
-def evaluate(calibration_results: list, sensors_config_path: str):
-    config = load_config(sensors_config_path)
-    # Get the name of the lidar we are evaluating
-    lidar_name = calibration_results[0]
-
-    # Get the calibration values from the calibration results for the lidar we are evaluating
-    calibration_res = calibration_results[1:]
-
-    # Fetch the ground truth calibration values for the lidar from the config file
-    ground_truth = config['sensor_kit_calibration']["hesai_center_lidar"][lidar_name]
-
-    # Get the ground truth translation and rotation values
-    translation_values_from_config = [ground_truth['x'], ground_truth['y'], ground_truth['z']]
-    rotation_values_from_config = [ground_truth['roll'], ground_truth['pitch'], ground_truth['yaw']]
-
-    # Combine the translation and rotation values
-    gt_data = translation_values_from_config + rotation_values_from_config
+def main(config_path):
+    config = load_config(config_path)
+    ground_truth = config['ground_truth']
+    calibration = config['calibration']
     
-    gt_data_arr = np.array(gt_data)
-    translation_errors, translation_error_rmse, rotation_error_degrees, rotation_errors_individual = calculate_rmse_error(gt_data_arr, calc_pose)
-    print(f"Errors for {lidar_name}:")
-    print(f"  Translation Errors [x, y, z]: {translation_errors}")
-    print(f"  Translation Error (RMSE) [m]: {translation_error_rmse}")
-    print(f"  Rotation Error (Degrees): {rotation_error_degrees}")
-    print(f"  Rotation Errors Individual [r, p, y]: {rotation_errors_individual}")
-    print("\n")
+    main_lidar_pose = ground_truth['main_lidar']
+    
+    translation_errors_all = []
+    rotation_errors_all = []
+    rotation_errors_individual_all = []
+    
+    for lidar, gt_pose in ground_truth.items():
+        if lidar != 'main_lidar':
+            gt_pose_matrix = np.array(gt_pose)
+            calc_pose = calibration[lidar]
+            translation_errors, translation_error_rmse, rotation_error_degrees, rotation_errors_individual = calculate_rmse_error(gt_pose_matrix, calc_pose)
+            print(f"Errors for {lidar}:")
+            print(f"  Translation Errors [x, y, z]: {translation_errors}")
+            print(f"  Translation Error (RMSE) [m]: {translation_error_rmse}")
+            print(f"  Rotation Error (Degrees): {rotation_error_degrees}")
+            print(f"  Rotation Errors Individual [r, p, y]: {rotation_errors_individual}")
+            print()
+            translation_errors_all.append(translation_errors)
+            rotation_errors_all.append(rotation_error_degrees)
+            rotation_errors_individual_all.append(rotation_errors_individual)
+    
+    avg_translation_errors = np.mean(translation_errors_all, axis=0)
+    avg_rotation_errors = np.mean(rotation_errors_all)
+    avg_rotation_errors_individual = np.mean(rotation_errors_individual_all, axis=0)
+    
+    print(f"Average Translation Errors [m]: {avg_translation_errors}")
+    print(f"Average Rotation Error (Degrees): {avg_rotation_errors}")
+    print(f"Average Rotation Errors Individual [r, p, y]: {avg_rotation_errors_individual}")
 
-    return translation_errors_all, rotation_errors_all, rotation_errors_individual_all
-
-
+if __name__ == "__main__":
+    config_path = "config.yaml"
+    main(config_path)

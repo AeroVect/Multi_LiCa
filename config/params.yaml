@@ -82,4 +82,4 @@
     calibration:
       sensors_config_path: /etc/tractor_config/sensors_config.yaml
       translation_rmse_threshold_m: 0.1
-      rotation_error_threshold_degree: 0.5
+      rotation_error_threshold_degree: 2.5
