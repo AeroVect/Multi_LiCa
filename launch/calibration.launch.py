@@ -42,7 +42,7 @@ def generate_launch_description():
                 'lidar_topics': left_to_center_lidar_calibration_node_topics
             }
         ],
-        remappings=[('/lidar_calibration', '/start_left_lidar_calibration')],
+        remappings=[('/lidar_calibration', '/offline_calibration/start_left_lidar_calibration')],
         output="screen",
     )
 
@@ -58,7 +58,7 @@ def generate_launch_description():
                 'lidar_topics': right_to_center_lidar_calibration_node_topics
             }
         ],
-        remappings=[('/lidar_calibration', '/start_right_lidar_calibration')],
+        remappings=[('/lidar_calibration', '/offline_calibration/start_right_lidar_calibration')],
         output="screen",
     )
 
