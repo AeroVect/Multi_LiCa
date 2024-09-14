@@ -3,9 +3,13 @@ import yaml
 from scipy.spatial.transform import Rotation as R
 
 def load_config(file_path):
-    with open(file_path, 'r') as file:
-        config = yaml.safe_load(file)
-    return config
+    # Check if the file exists
+    try:
+        with open(file_path, 'r') as file:
+            config = yaml.safe_load(file)
+        return config
+    except FileNotFoundError:
+        raise FileNotFoundError(f"File not found at {file_path}")
 
 def calculate_rmse_error(gt_pose, calc_pose):
     gt_translation = np.array(gt_pose[:3])
