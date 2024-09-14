@@ -14,6 +14,7 @@ from tf2_msgs.msg import TFMessage
 from .evaluation.evaluation_rel import evaluate
 from .calibration.Calibration import *
 from std_srvs.srv import Trigger
+import yaml
 
  
 def get_transfrom(tf_msg: TFMessage, child_frame_id: str) -> Transform:
@@ -92,6 +93,10 @@ class MultiLidarCalibrator(Node):
         self.translation_rmse_threshold_m = self.declare_parameter("calibration.translation_rmse_threshold_m", 0.1).value
         self.rotation_error_threshold_degree = self.declare_parameter("calibration.rotation_error_threshold_degree", 0.1).value
         self.sensors_config_path = self.declare_parameter("sensors_config_path", "/ros_ws/src/multi_lidar_calibration/multi_lidar_calibrator/evaluation/config.yaml").value
+        self.is_calibration_successful = False
+        self.calibration_results = None
+        self.results_filename = None
+        self.updated_calibration_file_path = self.declare_parameter("updated_calibration_file_path", "/ros_ws/src/multi_lidar_calibration/multi_lidar_calibrator/calibration_results/").value
         self.lidar_data = {}
         self.lidar_dict = {}
         self.subscribers = []
@@ -127,24 +132,69 @@ class MultiLidarCalibrator(Node):
        
         self.get_logger().info(f"Calibrating {calibrating_lidars}...")
         self.start_calibration()
-        # If we reach end of calibration process, the flag is set to False, which means we are done
-        # hence success is True
-        response.success = True
-        response.message = f"{calibrating_lidars} calibration completed!"
+
+        if self.is_calibration_successful:
+            self.get_logger().info(f"Calibration results are saved in {os.path.join(self.updated_calibration_file_path, self.results_filename)}")
+            response.success = True
+            # Set the response message to the updated calibration file path
+            response.message = f"{os.path.join(self.updated_calibration_file_path, self.results_filename)}"
+
+        else:
+            self.get_logger().info("Calibration failed, please check the calibration results")
+            response.success = False
+            # Set the response message to an empty string
+            response.message = ""
+
         return response
 
     def log_calibration_info(self, calibration: Calibration):
         """Log calibration information in ROS and output file"""
-        calibration_info = f"calibration info:\n{calibration.info(False)}"
-        
-        if not self.evaluate_calibration(calibration.info(False)):
+        calibration_info = f"Calibration info:\n{calibration.info(False)}"
+
+        self.is_calibration_successful = self.evaluate_calibration(calibration.info(False))
+
+        if not self.is_calibration_successful:
             self.get_logger().info("Calibration NOT SUCCESSFUL!")
         else:
             self.get_logger().info("Calibration SUCCESSFUL!")
+            # Write the results to the output file
+            self.update_calibration_results_file(self.updated_calibration_file_path)
         
         self.get_logger().info(calibration_info)
         with open(self.output_dir + self.results_file, "a") as file:
             file.write(calibration_info + "\n")
+
+    def update_calibration_results_file(self, updated_calibration_file_path: str):
+        # Set the results filename
+        self.results_filename = f"calibration_results_{self.calibration_results['source_name']}.yaml"
+        
+        # Check if the updated calibration file path exists, if not make the directory
+        if not os.path.exists(updated_calibration_file_path):
+            os.makedirs(updated_calibration_file_path)
+        else:
+            # Check if the calibration results file already exists, if so delete it
+            if os.path.exists(updated_calibration_file_path + self.results_filename):
+                os.remove(updated_calibration_file_path + self.results_filename)
+        # Check if the yaml file has 
+        sensor_config_data_to_save = {
+            'sensor_kit_calibration': {
+                self.calibration_results["target_name"]: {
+                    self.calibration_results["source_name"]: {
+                        'x': float(self.calibration_results["calibrated_xyz"][0]),
+                        'y': float(self.calibration_results["calibrated_xyz"][1]),
+                        'z': float(self.calibration_results["calibrated_xyz"][2]),
+                        'roll': float(self.calibration_results["calibrated_rpy"][0]),
+                        'pitch': float(self.calibration_results["calibrated_rpy"][1]),
+                        'yaw': float(self.calibration_results["calibrated_rpy"][2])
+                    }
+                }
+            }
+        }
+
+        # Save the calibration results to the updated calibration file
+        with open(updated_calibration_file_path + self.results_filename, 'w') as file:
+            yaml.dump(sensor_config_data_to_save, file)
+            self.get_logger().info(f"Calibration results saved in {updated_calibration_file_path + self.results_filename}")
 
     def evaluate_calibration(self, calibration: dict) -> bool:
         """Function to evaluate the calibration results. We can compare this with out ground truth data,
@@ -156,9 +206,9 @@ class MultiLidarCalibrator(Node):
         Returns:
             bool: returns True if the calibration values are within the desired threshold else False.
         """
+        self.calibration_results = calibration
         
         fitness = calibration["fitness"]
-        
         if fitness <= self.fitness_score_threshold:
             self.get_logger().info("Fitness score does not meet the threshold, Try calibrating again!")
             return False
