@@ -60,19 +60,6 @@ class MultiLidarCalibrator(Node):
         self.frame_count = self.declare_parameter("frame_count", 1).value
         self.runs_count = self.declare_parameter("runs_count", 1).value
         self.crop_cloud = self.declare_parameter("crop_cloud", 25).value
-        _is_left_lidar = True if '/left_lidar/lidar_points' in self.topic_names else False
-        self.output_dir = (
-            os.path.dirname(os.path.realpath(__file__))
-            + self.declare_parameter("output_dir", "/../output/").value
-        )
-        suffix = '_left' if _is_left_lidar else '_right'
-        if not os.path.exists(self.output_dir + suffix):
-            os.makedirs(self.output_dir + suffix)
-        self.pcd_in_dir = (
-            os.path.dirname(os.path.realpath(__file__))
-            + self.declare_parameter("pcd_directory", "/../data/demo/").value
-        )
-
         self.rel_fitness = self.declare_parameter("rel_fitness", 1e-7).value
         self.rel_rmse = self.declare_parameter("rel_rmse", 1e-7).value
         self.max_iterations = self.declare_parameter("max_iterations", 100).value
@@ -87,7 +74,6 @@ class MultiLidarCalibrator(Node):
         self.num_iterations = self.declare_parameter("num_iterations", 5000).value
         self.r_runs = self.declare_parameter("r_runs", 5).value
         self.urdf_path = self.declare_parameter("urdf_path", "").value
-        self.results_file = self.declare_parameter("results_file", "results.txt").value
         # Calibration thresholds for verification of the calibration results
         self.translation_rmse_threshold_m = self.declare_parameter("calibration.translation_rmse_threshold_m", 0.1).value
         self.rotation_error_threshold_degree = self.declare_parameter("calibration.rotation_error_threshold_degree", 0.1).value
@@ -96,10 +82,8 @@ class MultiLidarCalibrator(Node):
         self.lidar_dict = {}
         self.subscribers = []
         self.counter = 0
-        self.read_pcds_from_file = self.declare_parameter("read_pcds_from_file", True).value
+        self.read_pcds_from_file = self.declare_parameter("read_pcds_from_file", False).value
 
-        with open(self.output_dir + self.results_file, "w") as file:  # clean the file
-            file.write("")
         self.tf_msg: TFMessage = None
         self.declared_lidars_flag = False
         for topic in self.topic_names:
@@ -141,10 +125,9 @@ class MultiLidarCalibrator(Node):
             self.get_logger().info("Calibration NOT SUCCESSFUL!")
         else:
             self.get_logger().info("Calibration SUCCESSFUL!")
-        
+            # Write the results to the output file
+            self.update_calibration_results_file(self.updated_calibration_file_path)
         self.get_logger().info(calibration_info)
-        with open(self.output_dir + self.results_file, "a") as file:
-            file.write(calibration_info + "\n")
 
     def evaluate_calibration(self, calibration: dict) -> bool:
         """Function to evaluate the calibration results. We can compare this with out ground truth data,
@@ -301,9 +284,6 @@ class MultiLidarCalibrator(Node):
                 calibration.compute_gicp_transformation(self.voxel_size, self.remove_ground_flag)
                 if calibration.reg_p2l.fitness <= self.fitness_score_threshold:
                     self.get_logger().info(f"Problem with lidar {source_lidar.name} calibration")
-                    with open(self.output_dir + self.results_file, "a") as file:
-                        file.write("Calibration NOT SUCCESSFUL!\n")
-                calibration.transform_pointcloud()
                 self.log_calibration_info(calibration)
                 if self.urdf_path != "":
                     modify_urdf_joint_origin(
@@ -426,8 +406,6 @@ class MultiLidarCalibrator(Node):
             None
         """
         self.get_logger().info("Starting the calibration...")
-        if self.visualize:
-            visualize_calibration(list(self.lidar_dict.values()), False)
         target_lidar = self.lidar_dict[self.target_lidar]
         if self.calibrate_to_base and self.calibrate_target:
             # Perform target to ground (base) calibration. This computes the z-distance between the ground and the target
@@ -504,10 +482,8 @@ class MultiLidarCalibrator(Node):
             self.fitness_based_calibration(target_lidar)
         else:
             self.standard_calibration(target_lidar)
-
+        # Visualize the calibration results
         visualize_calibration(list(self.lidar_dict.values()), True, not self.visualize)
-        self.get_logger().info(f"Saved fused point cloud: {self.output_dir}")
-        self.get_logger().info(f"Calibrations results are stored in: {self.output_dir}")
 
     def tf_callback(self, msg):
         self.get_logger().info("Received TFMessage data")
@@ -548,8 +524,6 @@ class MultiLidarCalibrator(Node):
             self.read_data()
             self.process_data()
             end = time()
-            with open(self.output_dir + self.results_file, "a") as file:
-                file.write(f"Complete calibration time: {end - begin}\n")
             self.lidar_data = {}  # Clean the data after each calibration (for multiple runs)
             self.counter += 1
             if self.counter >= self.runs_count:
