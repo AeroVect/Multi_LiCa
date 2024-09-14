@@ -2,7 +2,7 @@ import xml.etree.ElementTree as ET
 
 import numpy as np
 import open3d as o3d
-
+from time import time
 import teaserpp_python
 from scipy.spatial import cKDTree
 
@@ -10,8 +10,7 @@ from .Geometry import Rotation, TransformationMatrix, Translation
 from .Lidar import Lidar
 from scipy.spatial.transform import Rotation as R
 
-
-def visualize_calibration(lidar_list: list[Lidar], transformed=True, only_paint=False):
+def visualize_calibration(lidar_list: list, transformed=True, only_paint=False):
     """
     Visualize the calibration of a list of LiDAR sensors.
 
@@ -43,10 +42,9 @@ def visualize_calibration(lidar_list: list[Lidar], transformed=True, only_paint=
     if only_paint:
         return
 
-    vis = o3d.visualization.Visualizer()
+    vis = o3d.visualization.VisualizerWithKeyCallback()
     vis.create_window(visible=True)
-    # Change the background color to black
-    vis.get_render_option().background_color = [0, 0, 0]
+    vis.get_render_option().background_color = [0, 0, 0]  # Black background
     vis.get_render_option().point_size = 2
 
     if transformed:
@@ -56,7 +54,24 @@ def visualize_calibration(lidar_list: list[Lidar], transformed=True, only_paint=
         for lidar in lidar_list:
             vis.add_geometry(lidar.pcd)
 
-    vis.run()
+    start_time = time()
+
+    def exit_on_q(vis):
+        print("Pressed 'q', exiting visualization.")
+        vis.close()
+
+    # Register the 'q' key to close the visualizer
+    vis.register_key_callback(ord("Q"), exit_on_q)
+    vis.register_key_callback(ord("q"), exit_on_q)
+
+    # Poll events in the main loop for 5 seconds
+    while time() - start_time <= 5:
+        vis.poll_events()
+        vis.update_renderer()
+
+    vis.destroy_window()
+
+
 
 
 def modify_urdf_joint_origin(file_path: str, joint_name: str, tf_matrix: TransformationMatrix):
