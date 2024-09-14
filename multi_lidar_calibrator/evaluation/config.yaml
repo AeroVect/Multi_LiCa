@@ -1,0 +1,17 @@
+sensor_kit_calibration:
+  hesai_center_lidar:
+    hesai_left_lidar:
+      x: 0.6596421
+      y: -0.469073
+      z: -0.1193018
+      roll: 0.705527
+      pitch: -0.0032639
+      yaw: 0.97736518
+
+    hesai_right_lidar:
+      x: -0.6272912
+      y: -0.51619299
+      z: -0.11448806
+      roll: 0.7255935
+      pitch: 0.02312703
+      yaw: -0.95566256

@@ -11,6 +11,7 @@ from rclpy.node import Node
 from sensor_msgs.msg import PointCloud2
 from tf2_msgs.msg import TFMessage
 
+from .evaluation.evaluation_rel import evaluate
 from .calibration.Calibration import *
 from std_srvs.srv import Trigger
 
@@ -87,6 +88,10 @@ class MultiLidarCalibrator(Node):
         self.r_runs = self.declare_parameter("r_runs", 5).value
         self.urdf_path = self.declare_parameter("urdf_path", "").value
         self.results_file = self.declare_parameter("results_file", "results.txt").value
+        # Calibration thresholds for verification of the calibration results
+        self.translation_rmse_threshold_m = self.declare_parameter("calibration.translation_rmse_threshold_m", 0.1).value
+        self.rotation_error_threshold_degree = self.declare_parameter("calibration.rotation_error_threshold_degree", 0.1).value
+        self.sensors_config_path = self.declare_parameter("sensors_config_path", "/ros_ws/src/multi_lidar_calibration/multi_lidar_calibrator/evaluation/config.yaml").value
         self.lidar_data = {}
         self.lidar_dict = {}
         self.subscribers = []
@@ -130,10 +135,53 @@ class MultiLidarCalibrator(Node):
 
     def log_calibration_info(self, calibration: Calibration):
         """Log calibration information in ROS and output file"""
-        calibration_info = f"calibration info:\n{calibration.info(False, True)}"
+        calibration_info = f"calibration info:\n{calibration.info(False)}"
+        
+        if not self.evaluate_calibration(calibration.info(False)):
+            self.get_logger().info("Calibration NOT SUCCESSFUL!")
+        else:
+            self.get_logger().info("Calibration SUCCESSFUL!")
+        
         self.get_logger().info(calibration_info)
         with open(self.output_dir + self.results_file, "a") as file:
             file.write(calibration_info + "\n")
+
+    def evaluate_calibration(self, calibration: dict) -> bool:
+        """Function to evaluate the calibration results. We can compare this with out ground truth data,
+        which here is the previous calibration value.
+
+        Args:
+            calibration: A dict containing the calibration results(x y z rpy) data.
+        
+        Returns:
+            bool: returns True if the calibration values are within the desired threshold else False.
+        """
+        
+        fitness = calibration["fitness"]
+        
+        if fitness <= self.fitness_score_threshold:
+            self.get_logger().info("Fitness score does not meet the threshold, Try calibrating again!")
+            return False
+        
+        self.get_logger().info("Evaluating the calibration results...")
+        self.get_logger().info(f"Translation RMSE threshold: {self.translation_rmse_threshold_m}")
+        self.get_logger().info(f"Rotation error threshold: {self.rotation_error_threshold_degree}")
+        
+        translation_error_rmse, rotation_error_degrees = evaluate(calibration, self.sensors_config_path)
+        
+        if translation_error_rmse is None or rotation_error_degrees is None:
+            self.get_logger().info("Error in evaluation, please check the config file")
+            return False
+        
+        if translation_error_rmse > self.translation_rmse_threshold_m:
+            self.get_logger().info("Translation error is above the threshold, Try calibrating again!")
+            return False
+        
+        if rotation_error_degrees > self.rotation_error_threshold_degree:
+            self.get_logger().info("Rotation error is above the threshold, Try calibrating again!")
+            return False
+
+        return True
 
     def read_data(self):
         """Read point clouds from ROS and LiDAR initial transformation from either ROS or table."""
