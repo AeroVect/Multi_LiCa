@@ -1,6 +1,7 @@
 import open3d as o3d
 import numpy as np 
 from scipy.spatial import cKDTree
+import scipy
 import teaserpp_python
 
 def pcd2xyz(pcd):
@@ -18,7 +19,12 @@ def extract_fpfh(pcd, voxel_size):
 
 def find_knn_cpu(feat0, feat1, knn=1, return_distance=False):
   feat1tree = cKDTree(feat1)
-  dists, nn_inds = feat1tree.query(feat0, k=knn, n_jobs=-1)
+  
+  if version.parse(scipy.__version__) >= version.parse('1.6.0'):
+      dists, nn_inds = feat1tree.query(feat0, k=knn, workers=-1)
+  else:
+      dists, nn_inds = feat1tree.query(feat0, k=knn, n_jobs=-1)
+
   if return_distance:
     return nn_inds, dists
   else:
