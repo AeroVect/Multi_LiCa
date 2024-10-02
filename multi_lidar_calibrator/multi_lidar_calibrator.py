@@ -78,11 +78,11 @@ class MultiLidarCalibrator(Node):
         # Calibration thresholds for verification of the calibration results
         self.translation_rmse_threshold_m = self.declare_parameter("calibration.translation_rmse_threshold_m", 0.1).value
         self.rotation_error_threshold_degree = self.declare_parameter("calibration.rotation_error_threshold_degree", 0.1).value
-        self.sensors_config_path = self.declare_parameter("sensors_config_path", "/ros_ws/src/multi_lidar_calibration/multi_lidar_calibrator/evaluation/config.yaml").value
+        self.sensors_config_path = self.declare_parameter("calibration.sensors_config_path", "/home/external_ws/src/Multi_LiCa/multi_lidar_calibrator/evaluation/config.yaml").value
         self.is_calibration_successful = False
         self.calibration_results = None
         self.results_filename = None
-        self.updated_calibration_file_path = self.declare_parameter("updated_calibration_file_path", "/ros_ws/src/multi_lidar_calibration/multi_lidar_calibrator/calibration_results/").value
+        self.updated_calibration_file_path = self.declare_parameter("calibration.updated_calibration_file_path", "/home/external_ws/src/Multi_LiCa/multi_lidar_calibrator/calibration_results/").value
         self.lidar_data = {}
         self.lidar_dict = {}
         self.subscribers = []
