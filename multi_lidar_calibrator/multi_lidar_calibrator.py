@@ -15,6 +15,8 @@ from .evaluation.evaluation_rel import evaluate
 from .calibration.Calibration import *
 from std_srvs.srv import Trigger
 import yaml
+import socket
+from datetime import datetime
 
  
 def get_transfrom(tf_msg: TFMessage, child_frame_id: str) -> Transform:
@@ -78,16 +80,25 @@ class MultiLidarCalibrator(Node):
         # Calibration thresholds for verification of the calibration results
         self.translation_rmse_threshold_m = self.declare_parameter("calibration.translation_rmse_threshold_m", 0.1).value
         self.rotation_error_threshold_degree = self.declare_parameter("calibration.rotation_error_threshold_degree", 0.1).value
-        self.sensors_config_path = self.declare_parameter("calibration.sensors_config_path", "/home/external_ws/src/Multi_LiCa/multi_lidar_calibrator/evaluation/config.yaml").value
+        vehicle_sensor_config_path = self.declare_parameter("calibration.vehicle_sensors_config_path", "path").value
+        default_sensors_config_path = self.declare_parameter("calibration.default_sensors_config_path", "path").value
         self.is_calibration_successful = False
         self.calibration_results = None
-        self.results_filename = None
-        self.updated_calibration_file_path = self.declare_parameter("calibration.updated_calibration_file_path", "/home/external_ws/src/Multi_LiCa/multi_lidar_calibrator/calibration_results/").value
+        self.calibration_file_path = self.declare_parameter("calibration.updated_calibration_file_path", "/home/external_ws/src/Multi_LiCa/multi_lidar_calibrator/calibration_results/").value
         self.lidar_data = {}
         self.lidar_dict = {}
         self.subscribers = []
         self.counter = 0
         self.read_pcds_from_file = self.declare_parameter("read_pcds_from_file", False).value
+        # Get hostname and current date for saving calibration results in correct path
+        self.hostname = socket.gethostname()
+        self.current_date = datetime.now().strftime("%Y-%m-%d")
+        # Create the updated calibration file path which is hostname and date based
+        self.updated_calibration_file_path = os.path.join(self.calibration_file_path, self.hostname, self.current_date)
+
+        # Use the extract_and_save_initial_calibration_from_vehicle_config method to extract the initial calibration from the vehicle's config file,
+        # If this fails we use the default values as initial guess else we use the extracted values save it in the updated calibration file path
+        self.sensors_config_path = self.extract_and_save_initial_calibration_from_vehicle_config(vehicle_sensor_config_path, self.updated_calibration_file_path) or default_sensors_config_path
 
         self.tf_msg: TFMessage = None
         self.declared_lidars_flag = False
@@ -116,12 +127,11 @@ class MultiLidarCalibrator(Node):
        
         self.get_logger().info(f"Calibrating {calibrating_lidars}...")
         self.start_calibration()
-
         if self.is_calibration_successful:
-            self.get_logger().info(f"Calibration results are saved in {os.path.join(self.updated_calibration_file_path, self.results_filename)}")
+            self.get_logger().info(f"Calibration results are saved in {self.updated_calibration_file_path}")
             response.success = True
             # Set the response message to the updated calibration file path
-            response.message = f"{os.path.join(self.updated_calibration_file_path, self.results_filename)}"
+            response.message = f"{self.updated_calibration_file_path}"
 
         else:
             self.get_logger().info("Calibration failed, please check the calibration results")
@@ -130,10 +140,68 @@ class MultiLidarCalibrator(Node):
             response.message = ""
 
         return response
+    
+    def extract_and_save_initial_calibration_from_vehicle_config(self, config_file_path: str, calibration_folder_path):
+        """
+        Extract the initial calibration from the vehicle's config file and write it. If this fails we use the default values as initial guess.
+
+        Args:
+        path: The path to the config file
+        """
+
+        try:
+            with open(config_file_path, 'r') as file:
+                config_data = yaml.safe_load(file)
+
+            # Extract the initial calibration values
+            sensor_kit_calibration = config_data.get('sensor_kit_calibration', {})
+
+            if not sensor_kit_calibration:
+                self.get_logger().warn("sensor_kit_calibration not found in the sensors_config file. Using default values.")
+                return None
+
+            
+            # Save the extracted calibration values to a new file called initial guess
+            initial_guess_file_path = os.path.join(calibration_folder_path, "initial_guess.yaml")
+            extracted_inital_guess = {
+                'sensor_kit_calibration': sensor_kit_calibration
+            }
+
+            # Check if the calibration folder path exists, if not make the directory
+            os.makedirs(calibration_folder_path, exist_ok=True)
+
+            # Check if the initial guess file already exists, if so delete it
+            if os.path.exists(initial_guess_file_path):
+                self.get_logger().info(f"Overwriting the previous initial guess file")
+                os.remove(initial_guess_file_path)
+
+            with open(initial_guess_file_path, 'w') as file:
+                yaml.dump(extracted_inital_guess, file, default_flow_style=False)
+            self.get_logger().info(f"Initial guess saved in {initial_guess_file_path}")
+
+            # Return the path to the initial guess file
+            return initial_guess_file_path
+            
+        
+        except FileNotFoundError:
+            self.get_logger().error(f"Config file not found at {config_file_path}. Using default values.")
+            return None
+
+        except yaml.YAMLError as e:
+            self.get_logger().error(f"Error parsing YAML file: {e}")
+            self.get_logger().info(f"Using default values for initial calibration.")
+            return None
+        
+        except Exception as e:
+            self.get_logger().error(f"An unexpected error occurred: {e}")
+            return None
 
     def log_calibration_info(self, calibration: Calibration):
         """Log calibration information in ROS and output file"""
         calibration_info = f"Calibration info:\n{calibration.info(False)}"
+
+        # Print the calibration info to the console if the file saving fails we can atleast see the results
+        self.get_logger().info(calibration_info)
 
         self.is_calibration_successful = self.evaluate_calibration(calibration.info(False))
 
@@ -144,17 +212,19 @@ class MultiLidarCalibrator(Node):
             # Write the results to the output file
             self.update_calibration_results_file(self.updated_calibration_file_path)
 
-    def update_calibration_results_file(self, updated_calibration_file_path: str):
-        # Set the results filename
-        self.results_filename = f"calibration_results_{self.calibration_results['source_name']}.yaml"
+    def update_calibration_results_file(self, calibration_file_path: str):
+        # Set the results filename along with the timestamp
+        results_filename = f"calibration_results_{self.calibration_results['source_name']}_{self.hostname}_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.yaml"
+        results_filepath = os.path.join(calibration_file_path, results_filename)
         
         # Check if the updated calibration file path exists, if not make the directory
-        if not os.path.exists(updated_calibration_file_path):
-            os.makedirs(updated_calibration_file_path)
-        else:
-            # Check if the calibration results file already exists, if so delete it
-            if os.path.exists(updated_calibration_file_path + self.results_filename):
-                os.remove(updated_calibration_file_path + self.results_filename)
+        os.makedirs(calibration_file_path, exist_ok=True)
+
+        # Check if the calibration results file already exists, if so delete it
+        if os.path.exists(results_filepath):
+            self.get_logger().info(f"Overwriting the previous calibration results file")
+            os.remove(results_filepath)
+        
         # Check if the yaml file has 
         sensor_config_data_to_save = {
             'sensor_kit_calibration': {
@@ -170,11 +240,13 @@ class MultiLidarCalibrator(Node):
                 }
             }
         }
-
-        # Save the calibration results to the updated calibration file
-        with open(updated_calibration_file_path + self.results_filename, 'w') as file:
-            yaml.dump(sensor_config_data_to_save, file)
-            self.get_logger().info(f"Calibration results saved in {updated_calibration_file_path + self.results_filename}")
+        # Save the calibration results to the yaml file
+        try:
+            with open(results_filepath, 'w') as file:
+                yaml.dump(sensor_config_data_to_save, file)
+            self.get_logger().info(f"Calibration results saved in {results_filepath}")
+        except Exception as e:
+            self.get_logger().error(f"Error saving calibration results: {e}")
 
     def evaluate_calibration(self, calibration: dict) -> bool:
         """Function to evaluate the calibration results. We can compare this with out ground truth data,
