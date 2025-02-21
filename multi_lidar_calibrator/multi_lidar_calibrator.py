@@ -15,7 +15,6 @@ from .evaluation.evaluation_rel import evaluate
 from .calibration.Calibration import *
 from std_srvs.srv import Trigger
 import yaml
-import socket
 from datetime import datetime
 
  
@@ -84,17 +83,12 @@ class MultiLidarCalibrator(Node):
         default_sensors_config_path = self.declare_parameter("calibration.default_sensors_config_path", "path").value
         self.is_calibration_successful = False
         self.calibration_results = None
-        self.calibration_file_path = self.declare_parameter("calibration.updated_calibration_file_path", "/home/external_ws/src/Multi_LiCa/multi_lidar_calibrator/calibration_results/").value
+        self.updated_calibration_file_path = self.declare_parameter("calibration.updated_calibration_file_path", "path").value
         self.lidar_data = {}
         self.lidar_dict = {}
         self.subscribers = []
         self.counter = 0
         self.read_pcds_from_file = self.declare_parameter("read_pcds_from_file", False).value
-        # Get hostname and current date for saving calibration results in correct path
-        self.hostname = socket.gethostname()
-        self.current_date = datetime.now().strftime("%Y-%m-%d")
-        # Create the updated calibration file path which is hostname and date based
-        self.updated_calibration_file_path = os.path.join(self.calibration_file_path, self.hostname, self.current_date)
 
         # Use the extract_and_save_initial_calibration_from_vehicle_config method to extract the initial calibration from the vehicle's config file,
         # If this fails we use the default values as initial guess else we use the extracted values save it in the updated calibration file path
@@ -214,7 +208,7 @@ class MultiLidarCalibrator(Node):
 
     def update_calibration_results_file(self, calibration_file_path: str):
         # Set the results filename along with the timestamp
-        results_filename = f"calibration_results_{self.calibration_results['source_name']}_{self.hostname}_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.yaml"
+        results_filename = f"calibration_results_{self.calibration_results['source_name']}_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.yaml"
         results_filepath = os.path.join(calibration_file_path, results_filename)
         
         # Check if the updated calibration file path exists, if not make the directory
