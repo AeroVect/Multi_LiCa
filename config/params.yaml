@@ -80,9 +80,9 @@
     r_runs: 10
 
     calibration:
-      vehicle_sensors_config_path: /etc/tractor_config/sensors_config.yaml
-      default_sensors_config_path: /home/docker_user/tractor_config/default_config.yaml
+      vehicle_sensors_config_path: /home/docker_user/tractor_config/sensors_config.yaml
+      default_sensors_config_path: /home/external_ws/src/Multi_LiCa/multi_lidar_calibrator/evaluation/default_config.yaml
       translation_rmse_threshold_m: 0.1
       rotation_error_threshold_degree: 2.5
-      updated_calibration_file_path: /data/bags
+      updated_calibration_file_path: /data/bags/calibration_data/lidar_to_lidar
 
