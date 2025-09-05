@@ -314,10 +314,35 @@ class MultiLidarCalibrator(Node):
         for key in self.lidar_data.keys():
             # convert data from ros to pcd needed for open3d
             t = rnp.numpify(self.lidar_data[key][0])
-            pcd = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(t["xyz"]))
+            
+            # Debug: Print available fields to understand data structure
+            self.get_logger().info(f"Available fields in PointCloud2 data: {t.dtype.names}")
+            
+            # Extract x, y, z coordinates - common field names in PointCloud2
+            if 'x' in t.dtype.names and 'y' in t.dtype.names and 'z' in t.dtype.names:
+                # Stack x, y, z fields into a single array
+                xyz = np.column_stack((t['x'], t['y'], t['z']))
+            elif 'xyz' in t.dtype.names:
+                xyz = t['xyz']
+            else:
+                self.get_logger().error(f"Cannot find x, y, z or xyz fields in PointCloud2 data. Available fields: {t.dtype.names}")
+                continue
+                
+            pcd = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(xyz))
+            
             for i in range(1, self.frame_count):
                 t = rnp.numpify(self.lidar_data[key][i])
-                pcd += o3d.geometry.PointCloud(o3d.utility.Vector3dVector(t["xyz"]))
+                
+                # Extract x, y, z coordinates for additional frames
+                if 'x' in t.dtype.names and 'y' in t.dtype.names and 'z' in t.dtype.names:
+                    xyz = np.column_stack((t['x'], t['y'], t['z']))
+                elif 'xyz' in t.dtype.names:
+                    xyz = t['xyz']
+                else:
+                    self.get_logger().error(f"Cannot find x, y, z or xyz fields in frame {i}. Available fields: {t.dtype.names}")
+                    continue
+                    
+                pcd += o3d.geometry.PointCloud(o3d.utility.Vector3dVector(xyz))
             self.lidar_dict[key].load_pcd(pcd)
         self.get_logger().info("Converted all the needed ros-data")
 
