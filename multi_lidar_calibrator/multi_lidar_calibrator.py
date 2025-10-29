@@ -314,15 +314,39 @@ class MultiLidarCalibrator(Node):
         for key in self.lidar_data.keys():
             # convert data from ros to pcd needed for open3d
             t = rnp.numpify(self.lidar_data[key][0])
+            # debug print
+            print(t)
+            # Handle different return types from rnp.numpify()
+            if t is None:
+                self.get_logger().error(f"Failed to convert PointCloud2 message to numpy array for {key}")
+                continue
             
-            # Extract x, y, z coordinates - common field names in PointCloud2
-            if 'x' in t.dtype.names and 'y' in t.dtype.names and 'z' in t.dtype.names:
-                # Stack x, y, z fields into a single array
-                xyz = np.column_stack((t['x'], t['y'], t['z']))
-            elif 'xyz' in t.dtype.names:
-                xyz = t['xyz']
+            # Extract x, y, z coordinates - handle both dict and structured array formats
+            xyz = None
+            if isinstance(t, dict):
+                # Handle dictionary format
+                if 'x' in t and 'y' in t and 'z' in t:
+                    xyz = np.column_stack((t['x'], t['y'], t['z']))
+                elif 'xyz' in t:
+                    xyz = t['xyz']
+                else:
+                    self.get_logger().error(f"Cannot find x, y, z or xyz fields in PointCloud2 dict. Available fields: {list(t.keys())}")
+                    continue
+            elif hasattr(t, 'dtype') and hasattr(t.dtype, 'names') and t.dtype.names is not None:
+                # Handle structured array format
+                if 'x' in t.dtype.names and 'y' in t.dtype.names and 'z' in t.dtype.names:
+                    xyz = np.column_stack((t['x'], t['y'], t['z']))
+                elif 'xyz' in t.dtype.names:
+                    xyz = t['xyz']
+                else:
+                    self.get_logger().error(f"Cannot find x, y, z or xyz fields in PointCloud2 structured array. Available fields: {t.dtype.names}")
+                    continue
             else:
-                self.get_logger().error(f"Cannot find x, y, z or xyz fields in PointCloud2 data. Available fields: {t.dtype.names}")
+                self.get_logger().error(f"Unexpected data format from rnp.numpify() for {key}. Type: {type(t)}")
+                continue
+                
+            if xyz is None:
+                self.get_logger().error(f"Failed to extract xyz coordinates for {key}")
                 continue
                 
             pcd = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(xyz))
@@ -330,13 +354,37 @@ class MultiLidarCalibrator(Node):
             for i in range(1, self.frame_count):
                 t = rnp.numpify(self.lidar_data[key][i])
                 
-                # Extract x, y, z coordinates for additional frames
-                if 'x' in t.dtype.names and 'y' in t.dtype.names and 'z' in t.dtype.names:
-                    xyz = np.column_stack((t['x'], t['y'], t['z']))
-                elif 'xyz' in t.dtype.names:
-                    xyz = t['xyz']
+                # Handle different return types from rnp.numpify() for additional frames
+                if t is None:
+                    self.get_logger().error(f"Failed to convert PointCloud2 message to numpy array for {key}, frame {i}")
+                    continue
+                
+                # Extract x, y, z coordinates for additional frames - handle both dict and structured array formats
+                xyz = None
+                if isinstance(t, dict):
+                    # Handle dictionary format
+                    if 'x' in t and 'y' in t and 'z' in t:
+                        xyz = np.column_stack((t['x'], t['y'], t['z']))
+                    elif 'xyz' in t:
+                        xyz = t['xyz']
+                    else:
+                        self.get_logger().error(f"Cannot find x, y, z or xyz fields in PointCloud2 dict for frame {i}. Available fields: {list(t.keys())}")
+                        continue
+                elif hasattr(t, 'dtype') and hasattr(t.dtype, 'names') and t.dtype.names is not None:
+                    # Handle structured array format
+                    if 'x' in t.dtype.names and 'y' in t.dtype.names and 'z' in t.dtype.names:
+                        xyz = np.column_stack((t['x'], t['y'], t['z']))
+                    elif 'xyz' in t.dtype.names:
+                        xyz = t['xyz']
+                    else:
+                        self.get_logger().error(f"Cannot find x, y, z or xyz fields in PointCloud2 structured array for frame {i}. Available fields: {t.dtype.names}")
+                        continue
                 else:
-                    self.get_logger().error(f"Cannot find x, y, z or xyz fields in frame {i}. Available fields: {t.dtype.names}")
+                    self.get_logger().error(f"Unexpected data format from rnp.numpify() for {key}, frame {i}. Type: {type(t)}")
+                    continue
+                    
+                if xyz is None:
+                    self.get_logger().error(f"Failed to extract xyz coordinates for {key}, frame {i}")
                     continue
                     
                 pcd += o3d.geometry.PointCloud(o3d.utility.Vector3dVector(xyz))
